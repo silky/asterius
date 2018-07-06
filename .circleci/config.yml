@@ -7,7 +7,7 @@ jobs:
       - image: ubuntu:bionic
     environment:
       DEBIAN_FRONTEND: noninteractive
-      GHC_REV: bb8383149640d919df071fce248afa0d83661c4b
+      GHC_REV: 671537364ae09dc65d4bb1c646aa80e9c8f808df
       JOBS: 9
       XZ_OPT: -9
     steps:
@@ -47,8 +47,6 @@ jobs:
             cd ghc
             git checkout $GHC_REV
             git submodule update --init --recursive
-            cd libraries/Cabal
-            git checkout 218c7bfc8e42e888bdd151ca0c22394959006c66
       - checkout
       - run:
           name: Compile GHC
