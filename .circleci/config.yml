@@ -7,7 +7,7 @@ jobs:
       - image: ubuntu:bionic
     environment:
       DEBIAN_FRONTEND: noninteractive
-      GHC_REV: 671537364ae09dc65d4bb1c646aa80e9c8f808df
+      GHC_REV: 3efd7cd9bacc362b97a5c8b23994addaa614adda
       JOBS: 9
       XZ_OPT: -9
     steps:
