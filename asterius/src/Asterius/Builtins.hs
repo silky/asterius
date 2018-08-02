@@ -726,7 +726,7 @@ memoryTrapFunction _ =
           { condition =
               V.foldl1' (Binary OrInt32) $
               V.fromList $
-              [ guard_struct (ConstI64 0) 8 []
+              [ guard_struct (ConstI64 0) 16 []
               , (task_p `neInt64` constI64 0) `andInt32`
                 guard_struct
                   task_p
