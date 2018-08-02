@@ -24,6 +24,7 @@ module Asterius.Builtins
   , errAtomics
   , errSetBaseReg
   , errBrokenFunction
+  , errAssert
   , wasmPageSize
   , cutI64
   , generateWasmFunctionTypeName
@@ -34,6 +35,7 @@ import Asterius.EDSL
 import Asterius.Internals
 import Asterius.Types
 import Asterius.TypesConv
+import Control.Monad
 import qualified Data.ByteString.Short as SBS
 import Data.Foldable
 import Data.List
@@ -117,6 +119,8 @@ rtsAsteriusModule opts =
         [ ("main", mainFunction opts)
         , ("hs_init", hsInitFunction opts)
         , ("rts_evalLazyIO", rtsEvalLazyIOFunction opts)
+        , ("setTSOLink", setTSOLinkFunction opts)
+        , ("setTSOPrev", setTSOPrevFunction opts)
         , ("scheduleWaitThread", scheduleWaitThreadFunction opts)
         , ("createThread", createThreadFunction opts)
         , ("createIOThread", createIOThreadFunction opts)
@@ -328,7 +332,7 @@ marshalErrorCode err vt =
     , valueType = vt
     }
 
-errGCEnter1, errGCFun, errBarf, errStgGC, errUnreachableBlock, errHeapOverflow, errMegaBlockGroup, errUnimplemented, errAtomics, errSetBaseReg, errBrokenFunction ::
+errGCEnter1, errGCFun, errBarf, errStgGC, errUnreachableBlock, errHeapOverflow, errMegaBlockGroup, errUnimplemented, errAtomics, errSetBaseReg, errBrokenFunction, errAssert ::
      Int32
 errGCEnter1 = 1
 
@@ -352,14 +356,54 @@ errSetBaseReg = 10
 
 errBrokenFunction = 11
 
-mainFunction, hsInitFunction, rtsEvalLazyIOFunction, scheduleWaitThreadFunction, createThreadFunction, createIOThreadFunction, allocateFunction, allocGroupOnNodeFunction, getMBlocksFunction, freeFunction, newCAFFunction, stgRunFunction, stgReturnFunction, printI64Function, printF32Function, printF64Function, memoryTrapFunction ::
+errAssert = 12
+
+assert :: BuiltinsOptions -> Expression -> EDSL ()
+assert BuiltinsOptions {..} cond =
+  when tracing $ if' cond mempty $ emit $ marshalErrorCode errAssert None
+
+mainFunction, hsInitFunction, rtsEvalLazyIOFunction, setTSOLinkFunction, setTSOPrevFunction, scheduleWaitThreadFunction, createThreadFunction, createIOThreadFunction, allocateFunction, allocGroupOnNodeFunction, getMBlocksFunction, freeFunction, newCAFFunction, stgRunFunction, stgReturnFunction, printI64Function, printF32Function, printF64Function, memoryTrapFunction ::
      BuiltinsOptions -> AsteriusFunction
 mainFunction BuiltinsOptions {..} =
   runEDSL $
   call "rts_evalLazyIO" [mainCapability, symbol "Main_main_closure", constI64 0]
 
+initCapability :: Expression -> Expression -> EDSL ()
+initCapability cap i = do
+  storeI32 cap offset_Capability_no i
+  storeI32 cap offset_Capability_node $ constI32 0
+  storeI8 cap offset_Capability_in_haskell $ constI32 0
+  storeI32 cap offset_Capability_idle $ constI32 0
+  storeI8 cap offset_Capability_disabled $ constI32 0
+  storeI64 cap offset_Capability_run_queue_hd endTSOQueue
+  storeI64 cap offset_Capability_run_queue_tl endTSOQueue
+  storeI32 cap offset_Capability_n_run_queue $ constI32 0
+  storeI64 cap offset_Capability_total_allocated $ constI64 0
+  storeI64 cap (offset_Capability_f + offset_StgFunTable_stgEagerBlackholeInfo) $
+    symbol "__stg_EAGER_BLACKHOLE_info"
+  storeI64 cap (offset_Capability_f + offset_StgFunTable_stgGCEnter1) $
+    symbol "__stg_gc_enter_1"
+  storeI64 cap (offset_Capability_f + offset_StgFunTable_stgGCFun) $
+    symbol "__stg_gc_fun"
+  storeI64 cap offset_Capability_weak_ptr_list_hd $ constI64 0
+  storeI64 cap offset_Capability_weak_ptr_list_tl $ constI64 0
+  storeI64 cap offset_Capability_free_tvar_watch_queues $
+    symbol "stg_END_STM_WATCH_QUEUE_closure"
+  storeI64 cap offset_Capability_free_trec_chunks $
+    symbol "stg_END_STM_CHUNK_LIST_closure"
+  storeI64 cap offset_Capability_free_trec_headers $
+    symbol "stg_NO_TREC_closure"
+  storeI32 cap offset_Capability_transaction_tokens $ constI32 0
+  storeI32 cap offset_Capability_context_switch $ constI32 0
+  storeI64 cap offset_Capability_pinned_object_block $ constI64 0
+  storeI64 cap offset_Capability_pinned_object_blocks $ constI64 0
+  storeI64 cap (offset_Capability_r + offset_StgRegTable_rCCCS) $ constI64 0
+  storeI64 cap (offset_Capability_r + offset_StgRegTable_rCurrentTSO) $
+    constI64 0
+
 hsInitFunction BuiltinsOptions {..} =
   runEDSL $ do
+    initCapability mainCapability (constI32 0)
     bd <- call' "allocGroupOnNode" [constI32 0, constI64 nurseryGroups] I64
     putLVal hp $ loadI64 bd offset_bdescr_start
     putLVal hpLim $
@@ -393,6 +437,59 @@ rtsEvalLazyIOFunction BuiltinsOptions {..} =
         [cap, constI64 $ roundup_bytes_to_words threadStateSize, p]
         I64
     call "scheduleWaitThread" [tso, ret, cap]
+
+appendToRunQueue :: BuiltinsOptions -> Expression -> Expression -> EDSL ()
+appendToRunQueue opts cap tso = do
+  assert opts $ loadI64 tso offset_StgTSO__link `eqInt64` endTSOQueue
+  if'
+    (loadI64 cap offset_Capability_run_queue_hd `eqInt64` endTSOQueue)
+    (do storeI64 cap offset_Capability_run_queue_hd tso
+        storeI64
+          tso
+          (offset_StgTSO_block_info + offset_StgTSOBlockInfo_prev)
+          endTSOQueue)
+    (do call "setTSOLink" [cap, loadI64 cap offset_Capability_run_queue_tl, tso]
+        call "setTSOPrev" [cap, tso, loadI64 cap offset_Capability_run_queue_tl])
+  storeI64 cap offset_Capability_run_queue_tl tso
+  storeI32 cap offset_Capability_n_run_queue $
+    loadI32 cap offset_Capability_n_run_queue `addInt32` constI32 1
+
+setTSOLinkFunction _ =
+  runEDSL $ do
+    [_, tso, target] <- params [I64, I64, I64]
+    if'
+      (eqZInt32 (loadI32 tso offset_StgTSO_dirty))
+      (storeI32 tso offset_StgTSO_dirty (constI32 1))
+      mempty
+    storeI64 tso offset_StgTSO__link target
+
+setTSOPrevFunction _ =
+  runEDSL $ do
+    [_, tso, target] <- params [I64, I64, I64]
+    if'
+      (eqZInt32 (loadI32 tso offset_StgTSO_dirty))
+      (storeI32 tso offset_StgTSO_dirty (constI32 1))
+      mempty
+    storeI64 tso (offset_StgTSO_block_info + offset_StgTSOBlockInfo_prev) target
+
+schedule :: Expression -> Expression -> EDSL ()
+schedule = undefined
+
+scheduleWaitThreadFunction' opts =
+  runEDSL $ do
+    [tso, ret, cap] <- params [I64, I64, I64]
+    task <- i64Local $ loadI64 cap offset_Capability_running_task
+    storeI64 tso offset_StgTSO_bound $ loadI64 task offset_Task_incall
+    storeI64 tso offset_StgTSO_cap cap
+    incall <- i64Local $ loadI64 task offset_Task_incall
+    storeI64 incall offset_InCall_tso tso
+    storeI64 incall offset_InCall_ret ret
+    storeI32 incall offset_InCall_rstat $ constI32 scheduler_NoStatus
+    appendToRunQueue opts cap tso
+    schedule cap task
+    assert opts $
+      loadI32 (loadI64 task offset_Task_incall) offset_InCall_rstat `neInt32`
+      constI32 scheduler_NoStatus
 
 scheduleWaitThreadFunction _ =
   runEDSL $ do
@@ -431,9 +528,26 @@ createThreadFunction _ =
     storeI64 stack_p offset_StgStack_sp $
       (stack_p `addInt64` constI64 offset_StgStack_stack) `addInt64`
       stack_size_w
+    storeI32 stack_p offset_StgStack_dirty $ constI32 1
+    storeI64 tso_p 0 $ symbol "stg_TSO_info"
+    storeI16 tso_p offset_StgTSO_what_next $ constI32 next_ThreadRunGHC
+    storeI16 tso_p offset_StgTSO_why_blocked $ constI32 blocked_NotBlocked
+    storeI64
+      tso_p
+      (offset_StgTSO_block_info + offset_StgTSOBlockInfo_closure)
+      endTSOQueue
+    storeI64 tso_p offset_StgTSO_blocked_exceptions endTSOQueue
+    storeI64 tso_p offset_StgTSO_bq endTSOQueue
+    storeI32 tso_p offset_StgTSO_flags $ constI32 0
+    storeI32 tso_p offset_StgTSO_dirty $ constI32 1
+    storeI64 tso_p offset_StgTSO__link endTSOQueue
+    storeI32 tso_p offset_StgTSO_saved_errno $ constI32 0
+    storeI64 tso_p offset_StgTSO_bound $ constI64 0
     storeI64 tso_p offset_StgTSO_cap cap
     storeI64 tso_p offset_StgTSO_stackobj stack_p
+    storeI32 tso_p offset_StgTSO_tot_stack_size $ wrapInt64 stack_size_w
     storeI64 tso_p offset_StgTSO_alloc_limit (constI64 0)
+    storeI64 tso_p offset_StgTSO_trec $ symbol "stg_NO_TREC_closure"
     storeI64 stack_p offset_StgStack_sp $
       loadI64 stack_p offset_StgStack_sp `subInt64`
       constI64 (8 * roundup_bytes_to_words sizeof_StgStopFrame)
@@ -613,7 +727,8 @@ memoryTrapFunction _ =
               V.foldl1' (Binary OrInt32) $
               V.fromList $
               [ guard_struct (ConstI64 0) 8 []
-              , guard_struct
+              , (task_p `neInt64` constI64 0) `andInt32`
+                guard_struct
                   task_p
                   sizeof_Task
                   [offset_Task_cap, offset_Task_incall]
@@ -625,11 +740,23 @@ memoryTrapFunction _ =
                       guard_struct
                         tso_p
                         sizeof_StgTSO
-                        [ offset_StgTSO_alloc_limit
+                        [ 0
+                        , offset_StgTSO_alloc_limit
+                        , offset_StgTSO_blocked_exceptions
+                        , offset_StgTSO_block_info
+                        , offset_StgTSO_bound
+                        , offset_StgTSO_bq
                         , offset_StgTSO_bound
                         , offset_StgTSO_cap
+                        , offset_StgTSO_dirty
+                        , offset_StgTSO_flags
+                        , offset_StgTSO_saved_errno
                         , offset_StgTSO_stackobj
+                        , offset_StgTSO_tot_stack_size
+                        , offset_StgTSO_trec
                         , offset_StgTSO_what_next
+                        , offset_StgTSO_why_blocked
+                        , offset_StgTSO__link
                         ]
                   }
               ] <>

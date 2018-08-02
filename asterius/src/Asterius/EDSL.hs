@@ -26,12 +26,15 @@ module Asterius.EDSL
   , pointerI64
   , pointerI32
   , pointerI16
+  , pointerI8
   , loadI64
   , loadI32
   , loadI16
+  , loadI8
   , storeI64
   , storeI32
   , storeI16
+  , storeI8
   , call
   , call'
   , callImport
@@ -44,6 +47,7 @@ module Asterius.EDSL
   , break'
   , whileLoop
   , eqZInt64
+  , eqZInt32
   , extendUInt32
   , wrapInt64
   , growMemory
@@ -52,8 +56,13 @@ module Asterius.EDSL
   , mulInt64
   , divUInt64
   , gtUInt64
+  , addInt32
   , mulInt32
+  , eqInt64
   , leUInt64
+  , neInt64
+  , neInt32
+  , andInt32
   , symbol
   , constI32
   , constI64
@@ -68,6 +77,7 @@ module Asterius.EDSL
   , currentNursery
   , hpAlloc
   , mainCapability
+  , endTSOQueue
   ) where
 
 import Asterius.Internals
@@ -225,26 +235,33 @@ pointer vt b bp o =
         0 -> bp
         _ -> bp `addInt64` constI64 o
 
-pointerI64, pointerI32, pointerI16 :: Expression -> Int -> LVal
+pointerI64, pointerI32, pointerI16, pointerI8 :: Expression -> Int -> LVal
 pointerI64 = pointer I64 8
 
 pointerI32 = pointer I32 4
 
 pointerI16 = pointer I32 2
 
-loadI64, loadI32, loadI16 :: Expression -> Int -> Expression
+pointerI8 = pointer I32 1
+
+loadI64, loadI32, loadI16, loadI8 :: Expression -> Int -> Expression
 loadI64 bp o = getLVal $ pointerI64 bp o
 
 loadI32 bp o = getLVal $ pointerI32 bp o
 
 loadI16 bp o = getLVal $ pointerI16 bp o
 
-storeI64, storeI32, storeI16 :: Expression -> Int -> Expression -> EDSL ()
+loadI8 bp o = getLVal $ pointerI8 bp o
+
+storeI64, storeI32, storeI16, storeI8 ::
+     Expression -> Int -> Expression -> EDSL ()
 storeI64 bp o = putLVal $ pointerI64 bp o
 
 storeI32 bp o = putLVal $ pointerI32 bp o
 
 storeI16 bp o = putLVal $ pointerI16 bp o
+
+storeI8 bp o = putLVal $ pointerI8 bp o
 
 call :: AsteriusEntitySymbol -> [Expression] -> EDSL ()
 call f xs = emit Call {target = f, operands = V.fromList xs, valueType = None}
@@ -326,8 +343,11 @@ break' (Label lbl) cond =
 whileLoop :: Expression -> EDSL () -> EDSL ()
 whileLoop cond body = loop' $ \lbl -> if' cond (body *> break' lbl Null) mempty
 
-eqZInt64, extendUInt32, wrapInt64, growMemory :: Expression -> Expression
+eqZInt64, eqZInt32, extendUInt32, wrapInt64, growMemory ::
+     Expression -> Expression
 eqZInt64 = Unary EqZInt64
+
+eqZInt32 = Unary EqZInt32
 
 extendUInt32 = Unary ExtendUInt32
 
@@ -335,7 +355,7 @@ wrapInt64 = Unary WrapInt64
 
 growMemory x = Host {hostOp = GrowMemory, name = "", operands = [x]}
 
-addInt64, subInt64, mulInt64, divUInt64, gtUInt64, mulInt32, leUInt64 ::
+addInt64, subInt64, mulInt64, divUInt64, gtUInt64, addInt32, mulInt32, eqInt64, leUInt64, neInt64, neInt32, andInt32 ::
      Expression -> Expression -> Expression
 addInt64 = Binary AddInt64
 
@@ -347,9 +367,19 @@ divUInt64 = Binary DivUInt64
 
 gtUInt64 = Binary GtUInt64
 
+addInt32 = Binary AddInt32
+
 mulInt32 = Binary MulInt32
 
+eqInt64 = Binary EqInt64
+
 leUInt64 = Binary LeUInt64
+
+neInt64 = Binary NeInt64
+
+neInt32 = Binary NeInt32
+
+andInt32 = Binary AndInt32
 
 symbol :: AsteriusEntitySymbol -> Expression
 symbol = Unresolved
@@ -381,5 +411,7 @@ currentNursery = global CurrentNursery
 
 hpAlloc = global HpAlloc
 
-mainCapability :: Expression
+mainCapability, endTSOQueue :: Expression
 mainCapability = symbol "MainCapability"
+
+endTSOQueue = symbol "stg_END_TSO_QUEUE_closure"
