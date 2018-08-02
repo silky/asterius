@@ -43,6 +43,9 @@ foreign import ccall unsafe "offset_Capability_r" offset_Capability_r :: Int
 
 foreign import ccall unsafe "offset_Capability_no" offset_Capability_no :: Int
 
+foreign import ccall unsafe "offset_Capability_node" offset_Capability_node
+  :: Int
+
 foreign import ccall unsafe "offset_Capability_running_task" offset_Capability_running_task
   :: Int
 
@@ -52,6 +55,9 @@ foreign import ccall unsafe "offset_Capability_in_haskell" offset_Capability_in_
 foreign import ccall unsafe "offset_Capability_idle" offset_Capability_idle
   :: Int
 
+foreign import ccall unsafe "offset_Capability_disabled" offset_Capability_disabled
+  :: Int
+
 foreign import ccall unsafe "offset_Capability_run_queue_hd" offset_Capability_run_queue_hd
   :: Int
 
@@ -59,6 +65,24 @@ foreign import ccall unsafe "offset_Capability_run_queue_tl" offset_Capability_r
   :: Int
 
 foreign import ccall unsafe "offset_Capability_n_run_queue" offset_Capability_n_run_queue
+  :: Int
+
+foreign import ccall unsafe "offset_Capability_suspended_ccalls" offset_Capability_suspended_ccalls
+  :: Int
+
+foreign import ccall unsafe "offset_Capability_n_suspended_ccalls" offset_Capability_n_suspended_ccalls
+  :: Int
+
+foreign import ccall unsafe "offset_Capability_mut_lists" offset_Capability_mut_lists
+  :: Int
+
+foreign import ccall unsafe "offset_Capability_saved_mut_lists" offset_Capability_saved_mut_lists
+  :: Int
+
+foreign import ccall unsafe "offset_Capability_pinned_object_block" offset_Capability_pinned_object_block
+  :: Int
+
+foreign import ccall unsafe "offset_Capability_pinned_object_blocks" offset_Capability_pinned_object_blocks
   :: Int
 
 foreign import ccall unsafe "offset_Capability_weak_ptr_list_hd" offset_Capability_weak_ptr_list_hd
@@ -74,6 +98,18 @@ foreign import ccall unsafe "offset_Capability_interrupt" offset_Capability_inte
   :: Int
 
 foreign import ccall unsafe "offset_Capability_total_allocated" offset_Capability_total_allocated
+  :: Int
+
+foreign import ccall unsafe "offset_Capability_free_tvar_watch_queues" offset_Capability_free_tvar_watch_queues
+  :: Int
+
+foreign import ccall unsafe "offset_Capability_free_trec_chunks" offset_Capability_free_trec_chunks
+  :: Int
+
+foreign import ccall unsafe "offset_Capability_free_trec_headers" offset_Capability_free_trec_headers
+  :: Int
+
+foreign import ccall unsafe "offset_Capability_transaction_tokens" offset_Capability_transaction_tokens
   :: Int
 
 foreign import ccall unsafe "sizeof_nursery" sizeof_nursery :: Int
