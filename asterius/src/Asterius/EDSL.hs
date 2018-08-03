@@ -46,6 +46,7 @@ module Asterius.EDSL
   , if'
   , break'
   , whileLoop
+  , switchI64
   , eqZInt64
   , eqZInt32
   , extendUInt32
@@ -59,6 +60,7 @@ module Asterius.EDSL
   , addInt32
   , mulInt32
   , eqInt64
+  , eqInt32
   , leUInt64
   , neInt64
   , neInt32
@@ -120,14 +122,12 @@ instance Monoid a => Monoid (EDSL a) where
 emit :: Expression -> EDSL ()
 emit e = EDSL $ modify' $ \s@EDSLState {..} -> s {exprBuf = exprBuf `DL.snoc` e}
 
-bundleExpressions :: DL.DList Expression -> Expression
-bundleExpressions es =
+bundleExpressions :: [Expression] -> Expression
+bundleExpressions el =
   case el of
     [] -> Nop
     [e] -> e
     _ -> Block {name = mempty, bodys = V.fromList el, valueType = Auto}
-  where
-    el = DL.toList es
 
 runEDSL :: EDSL () -> AsteriusFunction
 runEDSL (EDSL m) =
@@ -135,7 +135,7 @@ runEDSL (EDSL m) =
     { functionType =
         FunctionType
           {returnType = retType, paramTypes = V.fromList $ DL.toList paramBuf}
-    , body = bundleExpressions exprBuf
+    , body = bundleExpressions $ DL.toList exprBuf
     }
   where
     EDSLState {..} = execState m initialEDSLState
@@ -320,10 +320,17 @@ block' cont = do
     Block
       {name = unLabel lbl, bodys = V.fromList $ DL.toList es, valueType = Auto}
 
+blockWithLabel :: Label -> EDSL () -> EDSL ()
+blockWithLabel lbl m = do
+  es <- newScope m
+  emit
+    Block
+      {name = unLabel lbl, bodys = V.fromList $ DL.toList es, valueType = Auto}
+
 loop' cont = do
   lbl <- newLabel
   es <- newScope $ cont lbl
-  emit Loop {name = unLabel lbl, body = bundleExpressions es}
+  emit Loop {name = unLabel lbl, body = bundleExpressions $ DL.toList es}
 
 if' :: Expression -> EDSL () -> EDSL () -> EDSL ()
 if' cond t f = do
@@ -332,8 +339,8 @@ if' cond t f = do
   emit
     If
       { condition = cond
-      , ifTrue = bundleExpressions t_es
-      , ifFalse = bundleExpressions f_es
+      , ifTrue = bundleExpressions $ DL.toList t_es
+      , ifFalse = bundleExpressions $ DL.toList f_es
       }
 
 break' :: Label -> Expression -> EDSL ()
@@ -342,6 +349,32 @@ break' (Label lbl) cond =
 
 whileLoop :: Expression -> EDSL () -> EDSL ()
 whileLoop cond body = loop' $ \lbl -> if' cond (body *> break' lbl Null) mempty
+
+switchI64 :: Expression -> (EDSL () -> ([(Int, EDSL ())], EDSL ())) -> EDSL ()
+switchI64 cond make_clauses =
+  block' $ \switch_lbl ->
+    let exit_switch = break' switch_lbl Null
+        (clauses, def_clause) = make_clauses exit_switch
+        switch_block = do
+          switch_def_lbl <- newLabel
+          blockWithLabel switch_def_lbl $ do
+            clause_seq <-
+              for (reverse clauses) $ \(clause_i, clause_m) -> do
+                clause_lbl <- newLabel
+                pure (clause_i, clause_lbl, clause_m)
+            foldr
+              (\(_, clause_lbl, clause_m) tot_m -> do
+                 blockWithLabel clause_lbl tot_m
+                 clause_m)
+              (foldr
+                 (\(clause_i, clause_lbl, _) br_m -> do
+                    break' clause_lbl $ cond `eqInt64` constI64 clause_i
+                    br_m)
+                 (break' switch_def_lbl Null)
+                 clause_seq)
+              clause_seq
+          def_clause
+     in switch_block
 
 eqZInt64, eqZInt32, extendUInt32, wrapInt64, growMemory ::
      Expression -> Expression
@@ -355,7 +388,7 @@ wrapInt64 = Unary WrapInt64
 
 growMemory x = Host {hostOp = GrowMemory, name = "", operands = [x]}
 
-addInt64, subInt64, mulInt64, divUInt64, gtUInt64, addInt32, mulInt32, eqInt64, leUInt64, neInt64, neInt32, andInt32 ::
+addInt64, subInt64, mulInt64, divUInt64, gtUInt64, addInt32, mulInt32, eqInt64, eqInt32, leUInt64, neInt64, neInt32, andInt32 ::
      Expression -> Expression -> Expression
 addInt64 = Binary AddInt64
 
@@ -372,6 +405,8 @@ addInt32 = Binary AddInt32
 mulInt32 = Binary MulInt32
 
 eqInt64 = Binary EqInt64
+
+eqInt32 = Binary EqInt32
 
 leUInt64 = Binary LeUInt64
 
