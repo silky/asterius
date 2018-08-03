@@ -379,6 +379,14 @@ HsInt blocked_BlockedOnMsgThrowTo() { return BlockedOnMsgThrowTo; }
 
 HsInt blocked_ThreadMigrating() { return ThreadMigrating; }
 
+HsInt recent_ACTIVITY_YES() { return ACTIVITY_YES; }
+
+HsInt recent_ACTIVITY_MAYBE_NO() { return ACTIVITY_MAYBE_NO; }
+
+HsInt recent_ACTIVITY_INACTIVE() { return ACTIVITY_INACTIVE; }
+
+HsInt recent_ACTIVITY_DONE_GC() { return ACTIVITY_DONE_GC; }
+
 HsInt sched_SCHED_RUNNING() { return SCHED_RUNNING; }
 
 HsInt sched_SCHED_INTERRUPTING() { return SCHED_INTERRUPTING; }

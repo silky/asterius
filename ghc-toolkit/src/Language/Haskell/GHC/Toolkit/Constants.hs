@@ -410,6 +410,17 @@ foreign import ccall unsafe "blocked_BlockedOnMsgThrowTo" blocked_BlockedOnMsgTh
 foreign import ccall unsafe "blocked_ThreadMigrating" blocked_ThreadMigrating
   :: Int
 
+foreign import ccall unsafe "recent_ACTIVITY_YES" recent_ACTIVITY_YES :: Int
+
+foreign import ccall unsafe "recent_ACTIVITY_MAYBE_NO" recent_ACTIVITY_MAYBE_NO
+  :: Int
+
+foreign import ccall unsafe "recent_ACTIVITY_INACTIVE" recent_ACTIVITY_INACTIVE
+  :: Int
+
+foreign import ccall unsafe "recent_ACTIVITY_DONE_GC" recent_ACTIVITY_DONE_GC
+  :: Int
+
 foreign import ccall unsafe "sched_SCHED_RUNNING" sched_SCHED_RUNNING :: Int
 
 foreign import ccall unsafe "sched_SCHED_INTERRUPTING" sched_SCHED_INTERRUPTING
