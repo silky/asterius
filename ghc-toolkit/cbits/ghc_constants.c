@@ -1,4 +1,5 @@
 #include <Rts.h>
+#include <Schedule.h>
 #include <Capability.h>
 
 HsInt roundup(HsInt x, HsInt n) { return (x + (n - 1)) & (~(n - 1)); }
@@ -377,6 +378,12 @@ HsInt blocked_BlockedOnCCall_Interruptible() {
 HsInt blocked_BlockedOnMsgThrowTo() { return BlockedOnMsgThrowTo; }
 
 HsInt blocked_ThreadMigrating() { return ThreadMigrating; }
+
+HsInt sched_SCHED_RUNNING() { return SCHED_RUNNING; }
+
+HsInt sched_SCHED_INTERRUPTING() { return SCHED_INTERRUPTING; }
+
+HsInt sched_SCHED_SHUTTING_DOWN() { return SCHED_SHUTTING_DOWN; }
 
 HsInt scheduler_NoStatus() { return NoStatus; }
 

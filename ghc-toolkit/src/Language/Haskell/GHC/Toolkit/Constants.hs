@@ -410,6 +410,14 @@ foreign import ccall unsafe "blocked_BlockedOnMsgThrowTo" blocked_BlockedOnMsgTh
 foreign import ccall unsafe "blocked_ThreadMigrating" blocked_ThreadMigrating
   :: Int
 
+foreign import ccall unsafe "sched_SCHED_RUNNING" sched_SCHED_RUNNING :: Int
+
+foreign import ccall unsafe "sched_SCHED_INTERRUPTING" sched_SCHED_INTERRUPTING
+  :: Int
+
+foreign import ccall unsafe "sched_SCHED_SHUTTING_DOWN" sched_SCHED_SHUTTING_DOWN
+  :: Int
+
 foreign import ccall unsafe "scheduler_NoStatus" scheduler_NoStatus :: Int
 
 foreign import ccall unsafe "scheduler_Success" scheduler_Success :: Int
