@@ -421,6 +421,16 @@ foreign import ccall unsafe "recent_ACTIVITY_INACTIVE" recent_ACTIVITY_INACTIVE
 foreign import ccall unsafe "recent_ACTIVITY_DONE_GC" recent_ACTIVITY_DONE_GC
   :: Int
 
+foreign import ccall unsafe "ret_HeapOverflow" ret_HeapOverflow :: Int
+
+foreign import ccall unsafe "ret_StackOverflow" ret_StackOverflow :: Int
+
+foreign import ccall unsafe "ret_ThreadYielding" ret_ThreadYielding :: Int
+
+foreign import ccall unsafe "ret_ThreadBlocked" ret_ThreadBlocked :: Int
+
+foreign import ccall unsafe "ret_ThreadFinished" ret_ThreadFinished :: Int
+
 foreign import ccall unsafe "sched_SCHED_RUNNING" sched_SCHED_RUNNING :: Int
 
 foreign import ccall unsafe "sched_SCHED_INTERRUPTING" sched_SCHED_INTERRUPTING

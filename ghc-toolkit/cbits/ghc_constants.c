@@ -387,6 +387,16 @@ HsInt recent_ACTIVITY_INACTIVE() { return ACTIVITY_INACTIVE; }
 
 HsInt recent_ACTIVITY_DONE_GC() { return ACTIVITY_DONE_GC; }
 
+HsInt ret_HeapOverflow() { return HeapOverflow; }
+
+HsInt ret_StackOverflow() { return StackOverflow; }
+
+HsInt ret_ThreadYielding() { return ThreadYielding; }
+
+HsInt ret_ThreadBlocked() { return ThreadBlocked; }
+
+HsInt ret_ThreadFinished() { return ThreadFinished; }
+
 HsInt sched_SCHED_RUNNING() { return SCHED_RUNNING; }
 
 HsInt sched_SCHED_INTERRUPTING() { return SCHED_INTERRUPTING; }
