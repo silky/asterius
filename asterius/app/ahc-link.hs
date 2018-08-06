@@ -14,16 +14,19 @@ import Asterius.JSFFI
 import Asterius.Marshal
 import Asterius.Resolve
 import Asterius.Store
+import Asterius.Types
 import Bindings.Binaryen.Raw
 import Control.Exception
 import Control.Monad
 import qualified Data.ByteString as BS
 import Data.ByteString.Builder
 import qualified Data.HashMap.Strict as HM
+import qualified Data.HashSet as HS
 import Data.IORef
 import Data.List
 import qualified Data.Map.Strict as M
 import Data.Maybe
+import qualified Data.Vector as V
 import Foreign
 import qualified GhcPlugins as GHC
 import Language.Haskell.GHC.Toolkit.Constants
@@ -183,15 +186,10 @@ main = do
   putStrLn "[INFO] Attempting to link into a standalone WebAssembly module"
   let (!m_final_m, !report) =
         linkStart debug final_store $
-        if debug
-          then [ "hs_init"
-               , "main"
-               , "__asterius_Load_Sp"
-               , "__asterius_Load_SpLim"
-               , "__asterius_Load_Hp"
-               , "__asterius_Load_HpLim"
-               ]
-          else ["hs_init", "main"]
+        HS.fromList
+          [ AsteriusEntitySymbol {entityName = internalName}
+          | FunctionExport {..} <- V.toList $ rtsAsteriusFunctionExports debug
+          ]
   maybe
     (pure ())
     (\p -> do

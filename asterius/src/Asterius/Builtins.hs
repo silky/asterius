@@ -328,15 +328,14 @@ rtsAsteriusFunctionExports debug =
   V.fromList
     [ FunctionExport {internalName = f, externalName = f}
     | f <-
-        if debug
-          then [ "hs_init"
-               , "main"
-               , "__asterius_Load_Sp"
-               , "__asterius_Load_SpLim"
-               , "__asterius_Load_Hp"
-               , "__asterius_Load_HpLim"
-               ]
-          else ["hs_init", "main"]
+        (if debug
+           then [ "__asterius_Load_Sp"
+                , "__asterius_Load_SpLim"
+                , "__asterius_Load_Hp"
+                , "__asterius_Load_HpLim"
+                ]
+           else []) <>
+        ["hs_init", "rts_evalLazyIO", "main"]
     ]
 
 {-# INLINEABLE marshalErrorCode #-}
