@@ -96,6 +96,17 @@ opts =
      progDesc "Producing a standalone WebAssembly binary from Haskell" <>
      header "ahc-link - Linker for the Asterius compiler")
 
+genSymbolDict :: HM.HashMap AsteriusEntitySymbol Int64 -> Builder
+genSymbolDict sym_map =
+  "{" <>
+  mconcat
+    (intersperse
+       ","
+       [ string7 (show sym) <> ":" <> int64Dec sym_idx
+       | (sym, sym_idx) <- HM.toList sym_map
+       ]) <>
+  "}"
+
 genNode :: Task -> LinkReport -> IO Builder
 genNode Task {..} LinkReport {..} = do
   rts_buf <- BS.readFile $ dataDir </> "rts" </> "rts.js"
@@ -109,9 +120,13 @@ genNode Task {..} LinkReport {..} = do
       , string7 $ show $ takeFileName outputWasm
       , "), jsffiFactory: "
       , generateFFIImportObjectFactory bundledFFIMarshalState
+      , ", staticsSymbolMap: "
+      , genSymbolDict staticsSymbolMap
+      , ", functionSymbolMap: "
+      , genSymbolDict functionSymbolMap
       , "});\n"
       , "i.wasmInstance.exports.hs_init();\n"
-      , "i.wasmInstance.exports.main();\n"
+      , "i.wasmInstance.exports.rts_evalLazyIO(i.staticsSymbolMap.MainCapability, i.staticsSymbolMap.Main_main_closure, 0);\n"
       , "}\n"
       , "process.on('unhandledRejection', err => { throw err; });\n"
       , "main();\n"

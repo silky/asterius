@@ -248,6 +248,8 @@ async function newAsteriusInstance(req) {
   __asterius_wasm_instance = resultObject.instance;
   return {
     wasmModule: resultObject.module,
-    wasmInstance: resultObject.instance
+    wasmInstance: resultObject.instance,
+    staticsSymbolMap: req.staticsSymbolMap,
+    functionSymbolMap: req.functionSymbolMap
   };
 }

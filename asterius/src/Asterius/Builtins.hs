@@ -438,13 +438,13 @@ generateWrapperFunction func_sym AsteriusFunction { functionType = FunctionType 
   where
     wrapper_param_types =
       [ case param_type of
-        I64 -> (i, F64, truncUFloat64ToInt64)
+        I64 -> (i, I32, extendUInt32)
         _ -> (i, param_type, id)
       | (i, param_type) <- zip [0 ..] $ V.toList paramTypes
       ]
     (wrapper_return_type, to_wrapper_return_type) =
       case returnType of
-        I64 -> (F64, convertUInt64ToFloat64)
+        I64 -> (I32, wrapInt64)
         _ -> (returnType, id)
 
 mainFunction, hsInitFunction, rtsEvalFunction, rtsEvalIOFunction, rtsEvalLazyIOFunction, setTSOLinkFunction, setTSOPrevFunction, threadStackOverflowFunction, pushOnRunQueueFunction, scheduleWaitThreadFunction, createThreadFunction, createGenThreadFunction, createIOThreadFunction, createStrictIOThreadFunction, allocateFunction, allocGroupOnNodeFunction, getMBlocksFunction, freeFunction, newCAFFunction, stgRunFunction, stgReturnFunction, printI64Function, printF32Function, printF64Function, memoryTrapFunction ::
