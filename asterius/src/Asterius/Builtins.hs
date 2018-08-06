@@ -25,6 +25,10 @@ module Asterius.Builtins
   , errSetBaseReg
   , errBrokenFunction
   , errAssert
+  , errSchedulerReenteredFromHaskell
+  , errIllegalSchedState
+  , errIllegalPrevWhatNext
+  , errIllegalThreadReturnCode
   , wasmPageSize
   , cutI64
   , generateWasmFunctionTypeName
@@ -93,6 +97,9 @@ rtsAsteriusModule opts =
           , AsteriusStatics {asteriusStatics = [Uninitialized 8]})
         , ( "enabled_capabilities"
           , AsteriusStatics {asteriusStatics = [Uninitialized 4]})
+        , ( "heap_overflow"
+          , AsteriusStatics
+              {asteriusStatics = [Serialized (encodePrim (0 :: Word8))]})
         , ( "large_alloc_lim"
           , AsteriusStatics {asteriusStatics = [Uninitialized 8]})
         , ( "MainCapability"
@@ -105,12 +112,26 @@ rtsAsteriusModule opts =
               })
         , ( "n_capabilities"
           , AsteriusStatics {asteriusStatics = [Uninitialized 4]})
+        , ( "recent_activity"
+          , AsteriusStatics
+              { asteriusStatics =
+                  [ Serialized
+                      (encodePrim (fromIntegral recent_ACTIVITY_YES :: Word64))
+                  ]
+              })
         , ( "rts_stop_on_exception"
           , AsteriusStatics {asteriusStatics = [Uninitialized 4]})
         , ( "RtsFlags"
           , AsteriusStatics
               { asteriusStatics =
                   [Uninitialized (8 * roundup_bytes_to_words sizeof_RTS_FLAGS)]
+              })
+        , ( "sched_state"
+          , AsteriusStatics
+              { asteriusStatics =
+                  [ Serialized
+                      (encodePrim (fromIntegral sched_SCHED_RUNNING :: Word64))
+                  ]
               })
         , ( "stable_ptr_table"
           , AsteriusStatics {asteriusStatics = [Uninitialized 8]})
@@ -121,6 +142,8 @@ rtsAsteriusModule opts =
         , ("rts_evalLazyIO", rtsEvalLazyIOFunction opts)
         , ("setTSOLink", setTSOLinkFunction opts)
         , ("setTSOPrev", setTSOPrevFunction opts)
+        , ("threadStackOverflow", threadStackOverflowFunction opts)
+        , ("pushOnRunQueue", pushOnRunQueueFunction opts)
         , ("scheduleWaitThread", scheduleWaitThreadFunction opts)
         , ("createThread", createThreadFunction opts)
         , ("createIOThread", createIOThreadFunction opts)
@@ -332,7 +355,7 @@ marshalErrorCode err vt =
     , valueType = vt
     }
 
-errGCEnter1, errGCFun, errBarf, errStgGC, errUnreachableBlock, errHeapOverflow, errMegaBlockGroup, errUnimplemented, errAtomics, errSetBaseReg, errBrokenFunction, errAssert ::
+errGCEnter1, errGCFun, errBarf, errStgGC, errUnreachableBlock, errHeapOverflow, errMegaBlockGroup, errUnimplemented, errAtomics, errSetBaseReg, errBrokenFunction, errAssert, errSchedulerReenteredFromHaskell, errIllegalSchedState, errIllegalPrevWhatNext, errIllegalThreadReturnCode ::
      Int32
 errGCEnter1 = 1
 
@@ -358,11 +381,19 @@ errBrokenFunction = 11
 
 errAssert = 12
 
+errSchedulerReenteredFromHaskell = 13
+
+errIllegalSchedState = 14
+
+errIllegalPrevWhatNext = 15
+
+errIllegalThreadReturnCode = 16
+
 assert :: BuiltinsOptions -> Expression -> EDSL ()
 assert BuiltinsOptions {..} cond =
   when tracing $ if' cond mempty $ emit $ marshalErrorCode errAssert None
 
-mainFunction, hsInitFunction, rtsEvalLazyIOFunction, setTSOLinkFunction, setTSOPrevFunction, scheduleWaitThreadFunction, createThreadFunction, createIOThreadFunction, allocateFunction, allocGroupOnNodeFunction, getMBlocksFunction, freeFunction, newCAFFunction, stgRunFunction, stgReturnFunction, printI64Function, printF32Function, printF64Function, memoryTrapFunction ::
+mainFunction, hsInitFunction, rtsEvalLazyIOFunction, setTSOLinkFunction, setTSOPrevFunction, threadStackOverflowFunction, pushOnRunQueueFunction, scheduleWaitThreadFunction, createThreadFunction, createIOThreadFunction, allocateFunction, allocGroupOnNodeFunction, getMBlocksFunction, freeFunction, newCAFFunction, stgRunFunction, stgReturnFunction, printI64Function, printF32Function, printF64Function, memoryTrapFunction ::
      BuiltinsOptions -> AsteriusFunction
 mainFunction BuiltinsOptions {..} =
   runEDSL $
@@ -472,10 +503,299 @@ setTSOPrevFunction _ =
       mempty
     storeI64 tso (offset_StgTSO_block_info + offset_StgTSOBlockInfo_prev) target
 
-schedule :: Expression -> Expression -> EDSL ()
-schedule = undefined
+isBoundTask :: Expression -> Expression
+isBoundTask task =
+  loadI64 (loadI64 task offset_Task_incall) offset_InCall_tso `neInt64`
+  constI64 0
 
-scheduleWaitThreadFunction' opts =
+emptyRunQueue :: Expression -> Expression
+emptyRunQueue cap = eqZInt32 $ loadI32 cap offset_Capability_n_run_queue
+
+scheduleDoGC :: Expression -> Expression -> Expression -> EDSL ()
+scheduleDoGC _ _ _ = emit $ marshalErrorCode errUnimplemented None
+
+popRunQueue :: BuiltinsOptions -> Expression -> EDSL Expression
+popRunQueue opts cap = do
+  t <- i64Local $ loadI64 cap offset_Capability_run_queue_hd
+  assert opts $ t `neInt64` endTSOQueue
+  storeI64 cap offset_Capability_run_queue_hd $ loadI64 t offset_StgTSO__link
+  if'
+    (loadI64 t offset_StgTSO__link `neInt64` endTSOQueue)
+    (storeI64
+       (loadI64 t offset_StgTSO__link)
+       (offset_StgTSO_block_info + offset_StgTSOBlockInfo_prev)
+       endTSOQueue)
+    mempty
+  storeI64 t offset_StgTSO__link endTSOQueue
+  if'
+    (loadI64 cap offset_Capability_run_queue_hd `eqInt64` endTSOQueue)
+    (storeI64 cap offset_Capability_run_queue_tl endTSOQueue)
+    mempty
+  storeI32 cap offset_Capability_n_run_queue $
+    loadI32 cap offset_Capability_n_run_queue `subInt32` constI32 1
+  pure t
+
+deleteThread :: Expression -> EDSL ()
+deleteThread _ = emit $ marshalErrorCode errUnimplemented None
+
+dirtyTSO :: Expression -> Expression -> EDSL ()
+dirtyTSO _ tso =
+  if'
+    (eqZInt32 $ loadI32 tso offset_StgTSO_dirty)
+    (storeI32 tso offset_StgTSO_dirty $ constI32 1)
+    mempty
+
+dirtySTACK :: Expression -> Expression -> EDSL ()
+dirtySTACK _ stack =
+  if'
+    (eqZInt32 $ loadI32 stack offset_StgStack_dirty)
+    (storeI32 stack offset_StgStack_dirty $ constI32 1)
+    mempty
+
+scheduleHandleHeapOverflow :: Expression -> Expression -> EDSL Expression
+scheduleHandleHeapOverflow _ _ =
+  pure $ marshalErrorCode errIllegalThreadReturnCode None
+
+threadStackOverflowFunction _ =
+  runEDSL $ do
+    _ <- params [I64, I64]
+    emit $ marshalErrorCode errIllegalThreadReturnCode None
+
+pushOnRunQueueFunction _ =
+  runEDSL $ do
+    [cap, tso] <- params [I64, I64]
+    call "setTSOLink" [cap, tso, loadI64 cap offset_Capability_run_queue_hd]
+    storeI64
+      tso
+      (offset_StgTSO_block_info + offset_StgTSOBlockInfo_prev)
+      endTSOQueue
+    if'
+      (loadI64 cap offset_Capability_run_queue_hd `neInt64` endTSOQueue)
+      (call "setTSOPrev" [cap, loadI64 cap offset_Capability_run_queue_hd, tso])
+      mempty
+    storeI64 cap offset_Capability_run_queue_hd tso
+    if'
+      (loadI64 cap offset_Capability_run_queue_tl `eqInt64` endTSOQueue)
+      (storeI64 cap offset_Capability_run_queue_tl tso)
+      mempty
+    storeI32 cap offset_Capability_n_run_queue $
+      loadI32 cap offset_Capability_n_run_queue `addInt32` constI32 1
+
+scheduleHandleYield :: Expression -> Expression -> Expression -> EDSL Expression
+scheduleHandleYield _ _ _ =
+  pure $ marshalErrorCode errIllegalThreadReturnCode None
+
+scheduleHandleThreadBlocked :: Expression -> EDSL ()
+scheduleHandleThreadBlocked _ =
+  emit $ marshalErrorCode errIllegalThreadReturnCode None
+
+scheduleHandleThreadFinished ::
+     BuiltinsOptions
+  -> Expression
+  -> Expression
+  -> Expression
+  -> EDSL Expression
+scheduleHandleThreadFinished opts cap task t = do
+  r <- i32MutLocal
+  block' $ \ret_lbl ->
+    if'
+      (loadI64 t offset_StgTSO_bound `neInt64` constI64 0)
+      (do if'
+            (loadI64 t offset_StgTSO_bound `neInt64`
+             loadI64 task offset_Task_incall)
+            (do appendToRunQueue opts cap t
+                putLVal r $ constI32 0
+                break' ret_lbl Null)
+            mempty
+          assert opts $
+            loadI64 (loadI64 task offset_Task_incall) offset_InCall_tso `eqInt64`
+            t
+          if'
+            (loadI16 t offset_StgTSO_what_next `eqInt32`
+             constI32 next_ThreadComplete)
+            (do if'
+                  (loadI64 (loadI64 task offset_Task_incall) offset_InCall_ret `neInt64`
+                   constI64 0)
+                  (storeI64
+                     (loadI64
+                        (loadI64 task offset_Task_incall)
+                        offset_InCall_ret)
+                     0 $
+                   loadI64
+                     (loadI64
+                        (loadI64
+                           (loadI64
+                              (loadI64 task offset_Task_incall)
+                              offset_InCall_tso)
+                           offset_StgTSO_stackobj)
+                        offset_StgStack_sp)
+                     8)
+                  mempty
+                storeI32 (loadI64 task offset_Task_incall) offset_InCall_rstat $
+                  constI32 scheduler_Success)
+            (do if'
+                  (loadI64 (loadI64 task offset_Task_incall) offset_InCall_ret `neInt64`
+                   constI64 0)
+                  (storeI64
+                     (loadI64
+                        (loadI64 task offset_Task_incall)
+                        offset_InCall_ret)
+                     0 $
+                   constI64 0)
+                  mempty
+                if'
+                  (loadI64 (symbol "sched_state") 0 `geUInt64`
+                   constI64 sched_SCHED_INTERRUPTING)
+                  (if'
+                     (loadI8 (symbol "heap_overflow") 0)
+                     (storeI32
+                        (loadI64 task offset_Task_incall)
+                        offset_InCall_rstat $
+                      constI32 scheduler_HeapExhausted)
+                     (storeI32
+                        (loadI64 task offset_Task_incall)
+                        offset_InCall_rstat $
+                      constI32 scheduler_Interrupted))
+                  (storeI32
+                     (loadI64 task offset_Task_incall)
+                     offset_InCall_rstat $
+                   constI32 scheduler_Killed))
+          storeI64 t offset_StgTSO_bound $ constI64 0
+          storeI64 (loadI64 task offset_Task_incall) offset_InCall_tso $
+            constI64 0
+          putLVal r $ constI32 1)
+      (putLVal r $ constI32 0)
+  pure $ getLVal r
+
+scheduleNeedHeapProfile :: Expression -> EDSL Expression
+scheduleNeedHeapProfile _ = pure $ constI32 0
+
+schedule :: BuiltinsOptions -> Expression -> Expression -> EDSL ()
+schedule opts cap task = do
+  t <- i64MutLocal
+  ret <- i32MutLocal
+  ready_to_gc <- i32MutLocal
+  block' $ \sched_block_lbl ->
+    loop' $ \sched_loop_lbl -> do
+      if'
+        (loadI8 cap offset_Capability_in_haskell)
+        (emit (marshalErrorCode errSchedulerReenteredFromHaskell None))
+        mempty
+      switchI64 (loadI64 (symbol "sched_state") 0) $ \brake ->
+        ( [ (sched_SCHED_RUNNING, brake)
+          , ( sched_SCHED_INTERRUPTING
+            , do scheduleDoGC cap task (constI32 1)
+                 assert opts $
+                   loadI64 (symbol "sched_state") 0 `eqInt64`
+                   constI64 sched_SCHED_SHUTTING_DOWN)
+          , ( sched_SCHED_SHUTTING_DOWN
+            , if'
+                (eqZInt32 (isBoundTask task) `andInt32` emptyRunQueue cap)
+                (break' sched_block_lbl Null)
+                brake)
+          ]
+        , emit $ marshalErrorCode errIllegalSchedState None)
+      if'
+        (emptyRunQueue cap)
+        (assert opts $
+         loadI64 (symbol "sched_state") 0 `geUInt64`
+         constI64 sched_SCHED_INTERRUPTING)
+        mempty
+      popRunQueue opts cap >>= putLVal t
+      if'
+        ((loadI64 (symbol "sched_state") 0 `geUInt64`
+          constI64 sched_SCHED_INTERRUPTING) `andInt32`
+         notInt32
+           ((loadI16 (getLVal t) offset_StgTSO_what_next `eqInt32`
+             constI32 next_ThreadComplete) `orInt32`
+            (loadI16 (getLVal t) offset_StgTSO_what_next `eqInt32`
+             constI32 next_ThreadKilled)))
+        (deleteThread (getLVal t))
+        mempty
+      loop' $ \run_thread_lbl -> do
+        storeI64
+          cap
+          (offset_Capability_r + offset_StgRegTable_rCurrentTSO)
+          (getLVal t)
+        assert opts $ loadI64 (getLVal t) offset_StgTSO_cap `eqInt64` cap
+        assert opts $
+          (loadI64
+             (loadI64
+                (loadI64 (getLVal t) offset_StgTSO_bound)
+                offset_InCall_task)
+             offset_Task_cap `eqInt64`
+           cap) `orInt32`
+          eqZInt64 (loadI64 (getLVal t) offset_StgTSO_bound)
+        prev_what_next <- i32Local $ loadI16 (getLVal t) offset_StgTSO_what_next
+        storeI32 cap offset_Capability_interrupt $ constI32 0
+        storeI8 cap offset_Capability_in_haskell $ constI32 1
+        storeI32 cap offset_Capability_idle $ constI32 0
+        dirtyTSO cap (getLVal t)
+        dirtySTACK cap (loadI64 (getLVal t) offset_StgTSO_stackobj)
+        switchI64 (loadI64 (symbol "recent_activity") 0) $ \brake ->
+          ( [ ( recent_ACTIVITY_DONE_GC
+              , do storeI64
+                     (symbol "recent_activity")
+                     0
+                     (constI64 recent_ACTIVITY_YES)
+                   brake)
+            , (recent_ACTIVITY_INACTIVE, brake)
+            ]
+          , storeI64 (symbol "recent_activity") 0 (constI64 recent_ACTIVITY_YES))
+        switchI64 (extendUInt32 prev_what_next) $ \brake ->
+          ( [ (next_ThreadKilled, mempty)
+            , ( next_ThreadComplete
+              , do putLVal ret $ constI32 ret_ThreadFinished
+                   brake)
+            , ( next_ThreadRunGHC
+              , do r <-
+                     call'
+                       "StgRun"
+                       [ symbol "stg_returnToStackTop"
+                       , mainCapability `addInt64` constI64 offset_Capability_r
+                       ]
+                       I64
+                   putLVal ret $ wrapInt64 $ loadI64 r offset_StgRegTable_rRet
+                   brake)
+            ]
+          , emit $ marshalErrorCode errIllegalPrevWhatNext None)
+        storeI8 cap offset_Capability_in_haskell $ constI32 0
+        putLVal t $
+          loadI64 cap (offset_Capability_r + offset_StgRegTable_rCurrentTSO)
+        storeI64 cap (offset_Capability_r + offset_StgRegTable_rCurrentTSO) $
+          constI64 0
+        assert opts $ loadI64 (getLVal t) offset_StgTSO_cap `eqInt64` cap
+        putLVal ready_to_gc $ constI32 0
+        switchI64 (extendUInt32 (getLVal ret)) $ \brake ->
+          ( [ ( ret_HeapOverflow
+              , do scheduleHandleHeapOverflow cap (getLVal t) >>=
+                     putLVal ready_to_gc
+                   brake)
+            , ( ret_StackOverflow
+              , do call "threadStackOverflow" [cap, getLVal t]
+                   call "pushOnRunQueue" [cap, getLVal t]
+                   brake)
+            , ( ret_ThreadYielding
+              , do scheduleHandleYield cap (getLVal t) prev_what_next >>=
+                     break' run_thread_lbl
+                   brake)
+            , ( ret_ThreadBlocked
+              , do scheduleHandleThreadBlocked (getLVal t)
+                   brake)
+            , ( ret_ThreadFinished
+              , do scheduleHandleThreadFinished opts cap task (getLVal t) >>=
+                     break' sched_block_lbl
+                   brake)
+            ]
+          , emit $ marshalErrorCode errIllegalThreadReturnCode None)
+        need_heap_profile <- scheduleNeedHeapProfile (getLVal ready_to_gc)
+        if'
+          (getLVal ready_to_gc `orInt32` need_heap_profile)
+          (scheduleDoGC cap task (constI32 0))
+          mempty
+        break' sched_loop_lbl Null
+
+scheduleWaitThreadFunction opts =
   runEDSL $ do
     [tso, ret, cap] <- params [I64, I64, I64]
     task <- i64Local $ loadI64 cap offset_Capability_running_task
@@ -486,31 +806,10 @@ scheduleWaitThreadFunction' opts =
     storeI64 incall offset_InCall_ret ret
     storeI32 incall offset_InCall_rstat $ constI32 scheduler_NoStatus
     appendToRunQueue opts cap tso
-    schedule cap task
+    schedule opts cap task
     assert opts $
       loadI32 (loadI64 task offset_Task_incall) offset_InCall_rstat `neInt32`
       constI32 scheduler_NoStatus
-
-scheduleWaitThreadFunction _ =
-  runEDSL $ do
-    [tso, ret, cap] <- params [I64, I64, I64]
-    task <- i64Local $ loadI64 cap offset_Capability_running_task
-    storeI64 tso offset_StgTSO_bound $ loadI64 task offset_Task_incall
-    storeI64 tso offset_StgTSO_cap cap
-    incall <- i64Local $ loadI64 task offset_Task_incall
-    storeI64 incall offset_InCall_tso tso
-    storeI64 incall offset_InCall_ret ret
-    storeI64 cap (offset_Capability_r + offset_StgRegTable_rCurrentTSO) tso
-    storeI32 cap offset_Capability_interrupt (constI32 0)
-    _ <-
-      call'
-        "StgRun"
-        [ symbol "stg_returnToStackTop"
-        , cap `addInt64` constI64 offset_Capability_r
-        ]
-        I64
-    storeI64 incall offset_InCall_ret $
-      loadI64 (loadI64 tso $ offset_StgTSO_StgStack + offset_StgStack_sp) 8
 
 createThreadFunction _ =
   runEDSL $ do

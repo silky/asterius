@@ -39,7 +39,11 @@ async function newAsteriusInstance(req) {
                   "errAtomics",
                   "errSetBaseReg",
                   "errBrokenFunction",
-                  "errAssert"
+                  "errAssert",
+                  "errSchedulerReenteredFromHaskell",
+                  "errIllegalSchedState",
+                  "errIllegalPrevWhatNext",
+                  "errIllegalThreadReturnCode"
                 ][e - 1]
             ),
           __asterius_current_memory: p => {

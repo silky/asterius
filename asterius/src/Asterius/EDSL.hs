@@ -47,6 +47,7 @@ module Asterius.EDSL
   , break'
   , whileLoop
   , switchI64
+  , notInt32
   , eqZInt64
   , eqZInt32
   , extendUInt32
@@ -57,7 +58,9 @@ module Asterius.EDSL
   , mulInt64
   , divUInt64
   , gtUInt64
+  , geUInt64
   , addInt32
+  , subInt32
   , mulInt32
   , eqInt64
   , eqInt32
@@ -65,6 +68,7 @@ module Asterius.EDSL
   , neInt64
   , neInt32
   , andInt32
+  , orInt32
   , symbol
   , constI32
   , constI64
@@ -376,8 +380,10 @@ switchI64 cond make_clauses =
           def_clause
      in switch_block
 
-eqZInt64, eqZInt32, extendUInt32, wrapInt64, growMemory ::
+notInt32, eqZInt64, eqZInt32, extendUInt32, wrapInt64, growMemory ::
      Expression -> Expression
+notInt32 = eqZInt32
+
 eqZInt64 = Unary EqZInt64
 
 eqZInt32 = Unary EqZInt32
@@ -388,7 +394,7 @@ wrapInt64 = Unary WrapInt64
 
 growMemory x = Host {hostOp = GrowMemory, name = "", operands = [x]}
 
-addInt64, subInt64, mulInt64, divUInt64, gtUInt64, addInt32, mulInt32, eqInt64, eqInt32, leUInt64, neInt64, neInt32, andInt32 ::
+addInt64, subInt64, mulInt64, divUInt64, gtUInt64, geUInt64, addInt32, subInt32, mulInt32, eqInt64, eqInt32, leUInt64, neInt64, neInt32, andInt32, orInt32 ::
      Expression -> Expression -> Expression
 addInt64 = Binary AddInt64
 
@@ -400,7 +406,11 @@ divUInt64 = Binary DivUInt64
 
 gtUInt64 = Binary GtUInt64
 
+geUInt64 = Binary GeUInt64
+
 addInt32 = Binary AddInt32
+
+subInt32 = Binary SubInt32
 
 mulInt32 = Binary MulInt32
 
@@ -415,6 +425,8 @@ neInt64 = Binary NeInt64
 neInt32 = Binary NeInt32
 
 andInt32 = Binary AndInt32
+
+orInt32 = Binary OrInt32
 
 symbol :: AsteriusEntitySymbol -> Expression
 symbol = Unresolved
