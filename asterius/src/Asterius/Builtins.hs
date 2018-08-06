@@ -139,15 +139,25 @@ rtsAsteriusModule opts =
     , functionMap =
         [ ("main", mainFunction opts)
         , ("hs_init", hsInitFunction opts)
+        , ("rts_eval", rtsEvalFunction opts)
+        , ( "rts_eval_wrapper"
+          , generateWrapperFunction "rts_eval" $ rtsEvalFunction opts)
+        , ("rts_evalIO", rtsEvalIOFunction opts)
+        , ( "rts_evalIO_wrapper"
+          , generateWrapperFunction "rts_evalIO" $ rtsEvalIOFunction opts)
         , ("rts_evalLazyIO", rtsEvalLazyIOFunction opts)
-        , ("rts_evalLazyIO_wrapper", rtsEvalLazyIOWrapperFunction opts)
+        , ( "rts_evalLazyIO_wrapper"
+          , generateWrapperFunction "rts_evalLazyIO" $
+            rtsEvalLazyIOFunction opts)
         , ("setTSOLink", setTSOLinkFunction opts)
         , ("setTSOPrev", setTSOPrevFunction opts)
         , ("threadStackOverflow", threadStackOverflowFunction opts)
         , ("pushOnRunQueue", pushOnRunQueueFunction opts)
         , ("scheduleWaitThread", scheduleWaitThreadFunction opts)
         , ("createThread", createThreadFunction opts)
+        , ("createGenThread", createGenThreadFunction opts)
         , ("createIOThread", createIOThreadFunction opts)
+        , ("createStrictIOThread", createStrictIOThreadFunction opts)
         , ("allocate", allocateFunction opts)
         , ("allocGroupOnNode", allocGroupOnNodeFunction opts)
         , ("getMBlocks", getMBlocksFunction opts)
@@ -328,7 +338,7 @@ rtsAsteriusFunctionExports :: Bool -> V.Vector FunctionExport
 rtsAsteriusFunctionExports debug =
   V.fromList $
   [ FunctionExport {internalName = f <> "_wrapper", externalName = f}
-  | f <- ["rts_evalLazyIO"]
+  | f <- ["rts_eval", "rts_evalIO", "rts_evalLazyIO"]
   ] <>
   [ FunctionExport {internalName = f, externalName = f}
   | f <-
@@ -437,7 +447,7 @@ generateWrapperFunction func_sym AsteriusFunction { functionType = FunctionType 
         I64 -> (F64, convertUInt64ToFloat64)
         _ -> (returnType, id)
 
-mainFunction, hsInitFunction, rtsEvalLazyIOFunction, rtsEvalLazyIOWrapperFunction, setTSOLinkFunction, setTSOPrevFunction, threadStackOverflowFunction, pushOnRunQueueFunction, scheduleWaitThreadFunction, createThreadFunction, createIOThreadFunction, allocateFunction, allocGroupOnNodeFunction, getMBlocksFunction, freeFunction, newCAFFunction, stgRunFunction, stgReturnFunction, printI64Function, printF32Function, printF64Function, memoryTrapFunction ::
+mainFunction, hsInitFunction, rtsEvalFunction, rtsEvalIOFunction, rtsEvalLazyIOFunction, setTSOLinkFunction, setTSOPrevFunction, threadStackOverflowFunction, pushOnRunQueueFunction, scheduleWaitThreadFunction, createThreadFunction, createGenThreadFunction, createIOThreadFunction, createStrictIOThreadFunction, allocateFunction, allocGroupOnNodeFunction, getMBlocksFunction, freeFunction, newCAFFunction, stgRunFunction, stgReturnFunction, printI64Function, printF32Function, printF64Function, memoryTrapFunction ::
      BuiltinsOptions -> AsteriusFunction
 mainFunction BuiltinsOptions {..} =
   runEDSL $
@@ -503,18 +513,21 @@ hsInitFunction BuiltinsOptions {..} =
     storeI64 task offset_Task_incall incall
     storeI64 incall offset_InCall_task task
 
-rtsEvalLazyIOFunction BuiltinsOptions {..} =
-  runEDSL $ do
-    [cap, p, ret] <- params [I64, I64, I64]
-    tso <-
-      call'
-        "createIOThread"
-        [cap, constI64 $ roundup_bytes_to_words threadStateSize, p]
-        I64
-    call "scheduleWaitThread" [tso, ret, cap]
+rtsEvalHelper :: BuiltinsOptions -> AsteriusEntitySymbol -> EDSL ()
+rtsEvalHelper BuiltinsOptions {..} create_thread_func_sym = do
+  [cap, p, ret] <- params [I64, I64, I64]
+  tso <-
+    call'
+      create_thread_func_sym
+      [cap, constI64 $ roundup_bytes_to_words threadStateSize, p]
+      I64
+  call "scheduleWaitThread" [tso, ret, cap]
 
-rtsEvalLazyIOWrapperFunction opts =
-  generateWrapperFunction "rts_evalLazyIO" $ rtsEvalLazyIOFunction opts
+rtsEvalFunction opts = runEDSL $ rtsEvalHelper opts "createGenThread"
+
+rtsEvalIOFunction opts = runEDSL $ rtsEvalHelper opts "createStrictIOThread"
+
+rtsEvalLazyIOFunction opts = runEDSL $ rtsEvalHelper opts "createIOThread"
 
 appendToRunQueue :: BuiltinsOptions -> Expression -> Expression -> EDSL ()
 appendToRunQueue opts cap tso = do
@@ -908,15 +921,30 @@ pushClosure tso c = do
     loadI64 stack_p offset_StgStack_sp `subInt64` constI64 8
   storeI64 (loadI64 stack_p offset_StgStack_sp) 0 c
 
+createThreadHelper :: (Expression -> [Expression]) -> EDSL ()
+createThreadHelper mk_closures = do
+  setReturnType I64
+  [cap, stack_size, closure] <- params [I64, I64, I64]
+  t <- call' "createThread" [cap, stack_size] I64
+  for_ (mk_closures closure) $ pushClosure t
+  emit t
+
+createGenThreadFunction _ =
+  runEDSL $ createThreadHelper $ \closure -> [closure, symbol "stg_enter_info"]
+
 createIOThreadFunction _ =
-  runEDSL $ do
-    setReturnType I64
-    [cap, stack_size, closure] <- params [I64, I64, I64]
-    t <- call' "createThread" [cap, stack_size] I64
-    pushClosure t $ symbol "stg_ap_v_info"
-    pushClosure t closure
-    pushClosure t $ symbol "stg_enter_info"
-    emit t
+  runEDSL $
+  createThreadHelper $ \closure ->
+    [symbol "stg_ap_v_info", closure, symbol "stg_enter_info"]
+
+createStrictIOThreadFunction _ =
+  runEDSL $
+  createThreadHelper $ \closure ->
+    [ symbol "stg_forceIO_info"
+    , symbol "stg_ap_v_info"
+    , closure
+    , symbol "stg_enter_info"
+    ]
 
 allocateFunction _ =
   runEDSL $ do
