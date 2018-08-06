@@ -140,6 +140,7 @@ rtsAsteriusModule opts =
         [ ("main", mainFunction opts)
         , ("hs_init", hsInitFunction opts)
         , ("rts_evalLazyIO", rtsEvalLazyIOFunction opts)
+        , ("rts_evalLazyIO_wrapper", rtsEvalLazyIOWrapperFunction opts)
         , ("setTSOLink", setTSOLinkFunction opts)
         , ("setTSOPrev", setTSOPrevFunction opts)
         , ("threadStackOverflow", threadStackOverflowFunction opts)
@@ -325,18 +326,21 @@ rtsAsteriusFunctionImports debug =
 
 rtsAsteriusFunctionExports :: Bool -> V.Vector FunctionExport
 rtsAsteriusFunctionExports debug =
-  V.fromList
-    [ FunctionExport {internalName = f, externalName = f}
-    | f <-
-        (if debug
-           then [ "__asterius_Load_Sp"
-                , "__asterius_Load_SpLim"
-                , "__asterius_Load_Hp"
-                , "__asterius_Load_HpLim"
-                ]
-           else []) <>
-        ["hs_init", "rts_evalLazyIO", "main"]
-    ]
+  V.fromList $
+  [ FunctionExport {internalName = f <> "_wrapper", externalName = f}
+  | f <- ["rts_evalLazyIO"]
+  ] <>
+  [ FunctionExport {internalName = f, externalName = f}
+  | f <-
+      (if debug
+         then [ "__asterius_Load_Sp"
+              , "__asterius_Load_SpLim"
+              , "__asterius_Load_Hp"
+              , "__asterius_Load_HpLim"
+              ]
+         else []) <>
+      ["hs_init", "main"]
+  ]
 
 {-# INLINEABLE marshalErrorCode #-}
 marshalErrorCode :: Int32 -> ValueType -> Expression
@@ -392,7 +396,48 @@ assert :: BuiltinsOptions -> Expression -> EDSL ()
 assert BuiltinsOptions {..} cond =
   when tracing $ if' cond mempty $ emit $ marshalErrorCode errAssert None
 
-mainFunction, hsInitFunction, rtsEvalLazyIOFunction, setTSOLinkFunction, setTSOPrevFunction, threadStackOverflowFunction, pushOnRunQueueFunction, scheduleWaitThreadFunction, createThreadFunction, createIOThreadFunction, allocateFunction, allocGroupOnNodeFunction, getMBlocksFunction, freeFunction, newCAFFunction, stgRunFunction, stgReturnFunction, printI64Function, printF32Function, printF64Function, memoryTrapFunction ::
+generateWrapperFunction ::
+     AsteriusEntitySymbol -> AsteriusFunction -> AsteriusFunction
+generateWrapperFunction func_sym AsteriusFunction { functionType = FunctionType {..}
+                                                  , ..
+                                                  } =
+  AsteriusFunction
+    { functionType =
+        FunctionType
+          { returnType = wrapper_return_type
+          , paramTypes =
+              V.fromList
+                [ wrapper_param_type
+                | (_, wrapper_param_type, _) <- wrapper_param_types
+                ]
+          }
+    , body =
+        to_wrapper_return_type $
+        Call
+          { target = func_sym
+          , operands =
+              V.fromList
+                [ from_wrapper_param_type
+                  GetLocal {index = i, valueType = wrapper_param_type}
+                | (i, wrapper_param_type, from_wrapper_param_type) <-
+                    wrapper_param_types
+                ]
+          , valueType = returnType
+          }
+    }
+  where
+    wrapper_param_types =
+      [ case param_type of
+        I64 -> (i, F64, truncUFloat64ToInt64)
+        _ -> (i, param_type, id)
+      | (i, param_type) <- zip [0 ..] $ V.toList paramTypes
+      ]
+    (wrapper_return_type, to_wrapper_return_type) =
+      case returnType of
+        I64 -> (F64, convertUInt64ToFloat64)
+        _ -> (returnType, id)
+
+mainFunction, hsInitFunction, rtsEvalLazyIOFunction, rtsEvalLazyIOWrapperFunction, setTSOLinkFunction, setTSOPrevFunction, threadStackOverflowFunction, pushOnRunQueueFunction, scheduleWaitThreadFunction, createThreadFunction, createIOThreadFunction, allocateFunction, allocGroupOnNodeFunction, getMBlocksFunction, freeFunction, newCAFFunction, stgRunFunction, stgReturnFunction, printI64Function, printF32Function, printF64Function, memoryTrapFunction ::
      BuiltinsOptions -> AsteriusFunction
 mainFunction BuiltinsOptions {..} =
   runEDSL $
@@ -467,6 +512,9 @@ rtsEvalLazyIOFunction BuiltinsOptions {..} =
         [cap, constI64 $ roundup_bytes_to_words threadStateSize, p]
         I64
     call "scheduleWaitThread" [tso, ret, cap]
+
+rtsEvalLazyIOWrapperFunction opts =
+  generateWrapperFunction "rts_evalLazyIO" $ rtsEvalLazyIOFunction opts
 
 appendToRunQueue :: BuiltinsOptions -> Expression -> Expression -> EDSL ()
 appendToRunQueue opts cap tso = do

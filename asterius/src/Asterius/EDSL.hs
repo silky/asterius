@@ -52,6 +52,8 @@ module Asterius.EDSL
   , eqZInt32
   , extendUInt32
   , wrapInt64
+  , convertUInt64ToFloat64
+  , truncUFloat64ToInt64
   , growMemory
   , addInt64
   , subInt64
@@ -380,7 +382,7 @@ switchI64 cond make_clauses =
           def_clause
      in switch_block
 
-notInt32, eqZInt64, eqZInt32, extendUInt32, wrapInt64, growMemory ::
+notInt32, eqZInt64, eqZInt32, extendUInt32, wrapInt64, convertUInt64ToFloat64, truncUFloat64ToInt64, growMemory ::
      Expression -> Expression
 notInt32 = eqZInt32
 
@@ -391,6 +393,10 @@ eqZInt32 = Unary EqZInt32
 extendUInt32 = Unary ExtendUInt32
 
 wrapInt64 = Unary WrapInt64
+
+convertUInt64ToFloat64 = Unary ConvertUInt64ToFloat64
+
+truncUFloat64ToInt64 = Unary TruncUFloat64ToInt64
 
 growMemory x = Host {hostOp = GrowMemory, name = "", operands = [x]}
 
