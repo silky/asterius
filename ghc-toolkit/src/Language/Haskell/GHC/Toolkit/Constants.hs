@@ -265,6 +265,11 @@ foreign import ccall unsafe "offset_StgStack_stack" offset_StgStack_stack :: Int
 
 foreign import ccall unsafe "sizeof_StgStopFrame" sizeof_StgStopFrame :: Int
 
+foreign import ccall unsafe "sizeof_StgThunk" sizeof_StgThunk :: Int
+
+foreign import ccall unsafe "offset_StgThunk_payload" offset_StgThunk_payload
+  :: Int
+
 foreign import ccall unsafe "sizeof_StgTSO" sizeof_StgTSO :: Int
 
 foreign import ccall unsafe "offset_StgTSO__link" offset_StgTSO__link :: Int

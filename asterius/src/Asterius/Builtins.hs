@@ -39,7 +39,7 @@ import Asterius.EDSL
 import Asterius.Internals
 import Asterius.Types
 import Asterius.TypesConv
-import Control.Monad
+import Control.Monad (when)
 import qualified Data.ByteString.Short as SBS
 import Data.Foldable
 import Data.List
@@ -139,6 +139,9 @@ rtsAsteriusModule opts =
     , functionMap =
         [ ("main", mainFunction opts)
         , ("hs_init", hsInitFunction opts)
+        , ("rts_apply", rtsApplyFunction opts)
+        , ( "rts_apply_wrapper"
+          , generateWrapperFunction "rts_apply" $ rtsApplyFunction opts)
         , ("rts_eval", rtsEvalFunction opts)
         , ( "rts_eval_wrapper"
           , generateWrapperFunction "rts_eval" $ rtsEvalFunction opts)
@@ -338,7 +341,7 @@ rtsAsteriusFunctionExports :: Bool -> V.Vector FunctionExport
 rtsAsteriusFunctionExports debug =
   V.fromList $
   [ FunctionExport {internalName = f <> "_wrapper", externalName = f}
-  | f <- ["rts_eval", "rts_evalIO", "rts_evalLazyIO"]
+  | f <- ["rts_apply", "rts_eval", "rts_evalIO", "rts_evalLazyIO"]
   ] <>
   [ FunctionExport {internalName = f, externalName = f}
   | f <-
@@ -447,7 +450,7 @@ generateWrapperFunction func_sym AsteriusFunction { functionType = FunctionType 
         I64 -> (I32, wrapInt64)
         _ -> (returnType, id)
 
-mainFunction, hsInitFunction, rtsEvalFunction, rtsEvalIOFunction, rtsEvalLazyIOFunction, setTSOLinkFunction, setTSOPrevFunction, threadStackOverflowFunction, pushOnRunQueueFunction, scheduleWaitThreadFunction, createThreadFunction, createGenThreadFunction, createIOThreadFunction, createStrictIOThreadFunction, allocateFunction, allocGroupOnNodeFunction, getMBlocksFunction, freeFunction, newCAFFunction, stgRunFunction, stgReturnFunction, printI64Function, printF32Function, printF64Function, memoryTrapFunction ::
+mainFunction, hsInitFunction, rtsApplyFunction, rtsEvalFunction, rtsEvalIOFunction, rtsEvalLazyIOFunction, setTSOLinkFunction, setTSOPrevFunction, threadStackOverflowFunction, pushOnRunQueueFunction, scheduleWaitThreadFunction, createThreadFunction, createGenThreadFunction, createIOThreadFunction, createStrictIOThreadFunction, allocateFunction, allocGroupOnNodeFunction, getMBlocksFunction, freeFunction, newCAFFunction, stgRunFunction, stgReturnFunction, printI64Function, printF32Function, printF64Function, memoryTrapFunction ::
      BuiltinsOptions -> AsteriusFunction
 mainFunction BuiltinsOptions {..} =
   runEDSL $
@@ -522,6 +525,20 @@ rtsEvalHelper BuiltinsOptions {..} create_thread_func_sym = do
       [cap, constI64 $ roundup_bytes_to_words threadStateSize, p]
       I64
   call "scheduleWaitThread" [tso, ret, cap]
+
+rtsApplyFunction _ =
+  runEDSL $ do
+    setReturnType I64
+    [cap, f, arg] <- params [I64, I64, I64]
+    ap <-
+      call'
+        "allocate"
+        [cap, constI64 $ roundup_bytes_to_words sizeof_StgThunk + 2]
+        I64
+    storeI64 ap 0 $ symbol "stg_ap_2_upd_info"
+    storeI64 ap offset_StgThunk_payload f
+    storeI64 ap (offset_StgThunk_payload + 8) arg
+    emit ap
 
 rtsEvalFunction opts = runEDSL $ rtsEvalHelper opts "createGenThread"
 

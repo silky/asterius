@@ -249,6 +249,10 @@ HsInt offset_StgStack_stack() {
 
 HsInt sizeof_StgStopFrame() { return sizeof(StgStopFrame); }
 
+HsInt sizeof_StgThunk() { return sizeof(StgThunk); }
+
+HsInt offset_StgThunk_payload() { return offsetof(StgThunk, payload); }
+
 HsInt sizeof_StgTSO() { return sizeof(StgTSO); }
 
 HsInt offset_StgTSO__link() { return offsetof(StgTSO, _link); }

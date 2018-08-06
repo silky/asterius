@@ -44,11 +44,12 @@ data Task = Task
   , outputLinkReport, outputGraphViz :: Maybe FilePath
   , debug, optimize, outputIR, run :: Bool
   , heapSize :: Int
+  , asteriusInstanceCallback :: String
   }
 
 parseTask :: Parser Task
 parseTask =
-  (\i m_wasm m_node m_report m_gv dbg opt ir r m_hs ->
+  (\i m_wasm m_node m_report m_gv dbg opt ir r m_hs m_with_i ->
      Task
        { input = i
        , outputWasm = fromMaybe (i -<.> "wasm") m_wasm
@@ -60,6 +61,10 @@ parseTask =
        , outputIR = ir
        , run = r
        , heapSize = maybe 1024 read m_hs
+       , asteriusInstanceCallback =
+           fromMaybe
+             "i => {\ni.wasmInstance.exports.hs_init();\ni.wasmInstance.exports.rts_evalLazyIO(i.staticsSymbolMap.MainCapability, i.staticsSymbolMap.Main_main_closure, 0);\n}"
+             m_with_i
        }) <$>
   strOption (long "input" <> help "Path of the Main module") <*>
   optional
@@ -86,7 +91,12 @@ parseTask =
     (strOption
        (long "heap-size" <>
         help
-          "Heap size in MBs, used for both nursery/object pool. Defaults to 1024."))
+          "Heap size in MBs, used for both nursery/object pool. Defaults to 1024.")) <*>
+  optional
+    (strOption
+       (long "asterius-instance-callback" <>
+        help
+          "Supply a JavaScript callback expression which will be invoked on the initiated asterius instance. Defaults to calling Main.main"))
 
 opts :: ParserInfo Task
 opts =
@@ -125,8 +135,9 @@ genNode Task {..} LinkReport {..} = do
       , ", functionSymbolMap: "
       , genSymbolDict functionSymbolMap
       , "});\n"
-      , "i.wasmInstance.exports.hs_init();\n"
-      , "i.wasmInstance.exports.rts_evalLazyIO(i.staticsSymbolMap.MainCapability, i.staticsSymbolMap.Main_main_closure, 0);\n"
+      , "("
+      , string7 asteriusInstanceCallback
+      , ")(i);\n"
       , "}\n"
       , "process.on('unhandledRejection', err => { throw err; });\n"
       , "main();\n"
