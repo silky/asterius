@@ -186,6 +186,8 @@ main = do
                   , "containers"
                   , "transformers"
                   , "mtl"
+                  , "pretty"
+                  , "ghc-boot-th"
                   , "template-haskell"
                   ]
               ]
