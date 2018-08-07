@@ -168,28 +168,27 @@ main = do
         { ghcFlags =
             [ "-Wall"
             , "-O2"
+            , "-i" <> takeDirectory input
             , "-clear-package-db"
             , "-global-package-db"
             , "-package-db"
             , boot_pkgdb
             , "-hide-all-packages"
-            , "-package"
-            , "ghc-prim"
-            , "-package"
-            , "integer-simple"
-            , "-package"
-            , "base"
-            , "-package"
-            , "array"
-            , "-package"
-            , "deepseq"
-            , "-package"
-            , "containers"
-            , "-package"
-            , "transformers"
-            , "-package"
-            , "mtl"
-            ]
+            ] <>
+            mconcat
+              [ ["-package", pkg]
+              | pkg <-
+                  [ "ghc-prim"
+                  , "integer-simple"
+                  , "base"
+                  , "array"
+                  , "deepseq"
+                  , "containers"
+                  , "transformers"
+                  , "mtl"
+                  , "template-haskell"
+                  ]
+              ]
         , compiler = c
         }
       [input]
