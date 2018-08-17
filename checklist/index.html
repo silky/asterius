@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  
+  <link rel="shortcut icon" href="../img/favicon.ico">
+  <title>Checklist - Asterius</title>
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  <link rel="stylesheet" href="../css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="../css/highlight.css">
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "Checklist";
+    var mkdocs_page_input_path = "checklist.md";
+    var mkdocs_page_url = "/checklist/";
+  </script>
+  
+  <script src="../js/jquery-2.1.1.min.js"></script>
+  <script src="../js/modernizr-2.8.3.min.js"></script>
+  <script type="text/javascript" src="../js/highlight.pack.js"></script> 
+  
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href=".." class="icon icon-home"> Asterius</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+	<ul class="current">
+	  
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="..">Home</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">For users</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="../building/">Building guide</a>
+                </li>
+    </ul>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">For developers</span>
+    <ul class="subnav">
+                <li class=" current">
+                    
+    <a class="current" href="./">Checklist</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l3"><a href="#checklist">Checklist</a></li>
+    
+        <ul>
+        
+            <li><a class="toctree-l4" href="#towards-a-todomvc-example">Towards a TodoMVC example</a></li>
+        
+            <li><a class="toctree-l4" href="#next-important-tasks">Next important tasks</a></li>
+        
+            <li><a class="toctree-l4" href="#archived-tasks">Archived tasks</a></li>
+        
+        </ul>
+    
+
+    </ul>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../wasm-in-hs/">Writing WebAssembly code in Haskell</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../jsffi/">JavaScript FFI</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../debugging/">The runtime debugging feature</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../architecture/">Project architecture</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../webassembly/">WebAssembly as a Haskell compilation target</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../readings/">Reading list</a>
+                </li>
+    </ul>
+	    </li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="..">Asterius</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="..">Docs</a> &raquo;</li>
+    
+      
+        
+          <li>For developers &raquo;</li>
+        
+      
+    
+    <li>Checklist</li>
+    <li class="wy-breadcrumbs-aside">
+      
+        <a href="https://github.com/tweag/asterius/edit/master/docs/checklist.md"
+          class="icon icon-github"> Edit on GitHub</a>
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <h2 id="checklist">Checklist</h2>
+<p>This page maintains a list of upcoming tasks for the project, each task with a brief explanation, estimation of difficulty/time and connections with other tasks. Ideally this should be called <strong>Roadmap</strong> instead of <strong>Checklist</strong>, but placing accurate milestones has proven to be hard.</p>
+<h3 id="towards-a-todomvc-example">Towards a TodoMVC example</h3>
+<p>The tasks listed in this section are all necessary ones to achieve a more "real-world" browser example like TodoMVC. They are currently being worked on.</p>
+<h4 id="implement-foreign-export-javascript">Implement <code>foreign export javascript</code></h4>
+<p>We already can call JavaScript from Haskell via <code>foreign import javascript</code>, for JavaScript to call into Haskell, we need to implement <code>foreign export javascript</code>. The exported Haskell functions will be available as WebAssembly exported functions, callable in JavaScript land.</p>
+<p>Requirements:</p>
+<ul>
+<li>Implement <code>StablePtr</code>, so that Haskell closures can be safely passed between Haskell/JavaScript boundary without being garbage collected. (done, see <code>stableptr</code> unit test)</li>
+<li>Implement <code>RtsAPI</code>, so that JavaScript code can create Haskell closures, trigger evaluation and inspect results. (done, see <code>rtsapi</code> unit test)</li>
+<li>Add <code>StablePtr</code> to JSFFI basic types. (done, see <code>jsffi</code> unit test)</li>
+<li>Implement <code>foreign export javascript</code> syntax, add necessary logic in <code>JSFFI</code>/<code>Resolve</code> (in progress)</li>
+</ul>
+<p>Rough ETA: before Aug 20th.</p>
+<h4 id="improve-haskelljavascript-marshalling">Improve Haskell/JavaScript marshalling</h4>
+<p>Most JavaScript types will appear as opaque <code>JSRef</code> in Haskell land, but for some types that appear very often (e.g. strings and arrays), we wish they can be marshalled from/to their Haskell equivalents (e.g. lists) smoothly. Without this, even implementing a <code>putStr</code> will be troublesome because we must either send individual <code>Char</code>s to a TTY-device in JavaScript, or manually squeeze the string into a buffer in Haskell heap first.</p>
+<p>Requirements:</p>
+<ul>
+<li>Recognize <code>String</code>/<code>[]</code> as special JSFFI basic types, add marshalling logic from/to JavaScript strings/arrays. (in progress)</li>
+</ul>
+<p>When we support <code>aeson</code> in the future, it may even be possible to marshal between <code>Value</code>s and JavaScript objects directly.</p>
+<h4 id="support-bytestring">Support <code>bytestring</code></h4>
+<p><code>bytestring</code> is a critical component in the Haskell ecosystem, we must support it regardless of what filthy hacks are deployed. At least non-<code>Internal</code> modules need to be supported.</p>
+<p>Requirements:</p>
+<ul>
+<li>Add <code>bytestring</code> to boot libs.</li>
+<li>Implement <code>Weak#</code>, since <code>ByteString</code> needs finalizers</li>
+<li>Implement WebAssembly shims in <code>Builtins</code> for required C functions.</li>
+</ul>
+<h4 id="improve-wasmjs-generation">Improve <code>.wasm</code>/<code>.js</code> generation</h4>
+<p>Currently, given a home module, <code>ahc-link</code> outputs a <code>.wasm</code> and a <code>.js</code> wrapper which runs in Node.js. We will need the whole thing to run in browser though.</p>
+<p>Requirements:</p>
+<ul>
+<li>Add logic in <code>ahc-link</code> to generate browser-friendly code</li>
+<li>Make the test suite run via a headless browser, and properly retrieve results from the browser back to Haskell</li>
+</ul>
+<h3 id="next-important-tasks">Next important tasks</h3>
+<p>The following tasks are somewhat less important, but still necessary for end-user experience. They will be processed once the previous goal is accomplished.</p>
+<h4 id="utilize-ghc-renamertypechecker-in-jsffi">Utilize GHC renamer/typechecker in JSFFI</h4>
+<p>Currently, the JSFFI thing works with parsed AST because it's less likely to mess up after rewriting. As a consequence:</p>
+<ul>
+<li><code>JSRef</code> only works as a magic identifier. It's not in any actual Haskell module</li>
+<li>No <code>newtypes</code> for JSFFI basic types, since we recognize types by <code>RdrName</code> only</li>
+</ul>
+<p>We need to move JSFFI processing to the phase of renamer or typechecker.</p>
+<h4 id="support-javascript-promises-in-jsffi">Support JavaScript promises in JSFFI</h4>
+<p>The <code>foreign import javascript</code> syntax currently assumes the JavaScript computation is synchronous. We need to support asynchronous JavaScript computation, by adding a <code>foreign import javascript safe</code> construct, and assume the JavaScript computation returns a <code>Promise</code>. Upon calling such a function, the scheduler saves thread state and gracefully halts the whole runtime. The runtime will be re-activated once the <code>Promise</code> is fulfilled.</p>
+<h4 id="add-growable-heapgarbage-collection-to-storage-manager">Add growable heap/garbage collection to storage manager</h4>
+<p>Currently, the heap size is fixed and can be specified by <code>ahc-link --heap-size</code>. By defaulting a heap size of 1GB, we pretend memory is infinite and focus work on other issues, but this can come back to bite us at any time.</p>
+<p>There are two steps in this tasks:</p>
+<ul>
+<li>Implement growable heap. When GC is entered, we allocate fresh blocks and move the nursery/object pool to point to new blocks.</li>
+<li>Implement garbage collection. Porting all GC routines is a huge amount of work and error-prone, so we implement a non-generational one in JavaScript.</li>
+</ul>
+<h4 id="solve-reference-leaking-in-jsffi">Solve reference leaking in JSFFI</h4>
+<p><code>JSRef</code> is implemented much like <code>StablePtr</code>: a mapping from handles to objects. Whenever a <code>JSRef</code> enters Haskell land, the underlying object is pointed to by a mapping, but currently there's no mechanism to free a <code>JSRef</code>.</p>
+<p>Some possible fixes:</p>
+<ul>
+<li>Provide <code>freeJSRef</code> in Haskell land, works for any individual <code>JSRef</code></li>
+<li>Provide <code>nukeJSRefs</code>, can be called periodically to wipe all <code>JSRef</code>s</li>
+<li>Provide a region-based API, all <code>JSRef</code>s are tied to a region. Regions themselves can be allocated and recycled. Optionally there can be a global region.</li>
+</ul>
+<h4 id="improve-cabal-support">Improve <code>Cabal</code> support</h4>
+<p>Currently, <code>Cabal</code> still thinks <code>ahc</code> is yet another <code>ghc</code> and feeds it with <code>ghc</code> command line arguments. We should teach it to regard <code>ahc</code> as a new Haskell compiler, and what to do for typical commands (<code>configure</code>/<code>build</code>/<code>install</code>, etc).</p>
+<p>After <code>Cabal</code> support is improved, we can:</p>
+<ul>
+<li>Get away with current "boot libs" mechanism, instead rely on regular GHC package databases</li>
+<li>Give users ability to build/use packages outside boot libs</li>
+<li>Go on with improving <code>cabal-install</code>, some day a plain <code>cabal build --asterius</code> may work</li>
+</ul>
+<h4 id="improve-test-suite">Improve test suite</h4>
+<p>The current test suites have poor coverage of Haskell features.</p>
+<h3 id="archived-tasks">Archived tasks</h3>
+<p>The following tasks have lower priority, either due to low impact to end-user experience or significant time involved. They are archived here and may be revisited at a later date, and we're still happy to discuss or review a pull request.</p>
+<h4 id="implement-template-haskellghci">Implement Template Haskell/GHCi</h4>
+<p>There are two possible ways to implement Template Haskell/GHCi:</p>
+<ul>
+<li>Link with the native code produced when booting. For simple <code>Q</code> computations that doesn't involve <code>runIO</code> this should work fine, but it won't work when one calls a WebAssembly computation in <code>Q</code>.</li>
+<li>Implement the remote interpreter for WebAssembly, much like ghcjs. When Template Haskell/GHCi is involved, we fire up a Node.js/Headless Chrome process and do all the message passing. This is the ideal solution but takes a huge amount of work.</li>
+</ul>
+<h4 id="improve-webassembly-edsl">Improve WebAssembly EDSL</h4>
+<p>We already have a monadic EDSL for constructing WebAssembly code. There are still minor flaws with current EDSL:</p>
+<ul>
+<li>No notion of <code>struct</code>s. We manually load/store via a base pointer and an offset.</li>
+<li>Not type-safe. It's possible to mix-up <code>I32</code>/<code>I64</code> stuff and it's not always possible for <code>binaryen</code> validator to catch the problem (especially when load/store is involved)</li>
+<li>Global/static variables need a lot of boilerplate</li>
+</ul>
+<h4 id="switch-away-from-binaryen">Switch away from <code>binaryen</code></h4>
+<p><code>binaryen</code> is a fantastic library for WebAssembly code generation and has powered <code>asterius</code> since the beginning. However, there are reasons to switch away and implement our own WebAssembly code generation library:</p>
+<ul>
+<li>The relooper has been a constant source of trouble. We already implement our own relooper now.</li>
+<li>There's no support for linking and symbol resolution, so we have to keep two sets of types for WebAssembly: one is our own for pre-linking modules, one is the final linked data to feed to <code>binaryen</code>, but they overlap a lot.</li>
+<li><code>binaryen</code> is conservative in features. We'd like to try experimental WebAssembly features (exception handling, multi-return, anyref, etc) in V8.</li>
+</ul>
+<h4 id="integrate-llvmclang-or-emscripten">Integrate LLVM/Clang or Emscripten</h4>
+<p>It's a shame we can't compile simple <code>cbits</code> in Haskell packages and have to hand-write WebAssembly code instead.</p>
+<h4 id="implement-try-asterius-website">Implement "Try asterius" website</h4>
+<p>To increase momentum for this project, it'd be nice to have a "try asterius" website, where people can send snippets of modules and download compiled code to run in their browsers.</p>
+<h4 id="add-macos-support">Add macOS support</h4>
+<p>Currently we don't build GHC bindists for macOS and test it on CircleCI. For the sake of macOS Haskellers this should be implemented.</p>
+<h4 id="add-nixbazel-support">Add Nix/Bazel support</h4>
+<p>It'd be nice to support building the project via Nix/Bazel.</p>
+<h4 id="support-integer-gmp">Support <code>integer-gmp</code></h4>
+<p>We currently use <code>integer-simple</code>, but not all packages implement the flags to switch away from <code>integer-gmp</code>.</p>
+<p>It's worth mentioning that V8 already has experimental support for the BigInt proposal, so <code>Integer</code>s should ideally be powered by <code>bigint</code>s under the hood.</p>
+<h4 id="support-tables-next-to-code">Support tables-next-to-code</h4>
+<p>Of course, we know the WebAssembly standard separates data and code, so something like tables-next-to-code won't work; but come to think of it, at link time we already know the absolute addresses of "code", so we can cheat a little bit here..</p>
+<p>If we support both <code>integer-gmp</code> and tables-next-to-code, we can stop requiring users to set up a custom GHC first, and can distribute <code>asterius</code> as a vanilla package.</p>
+              
+            </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../wasm-in-hs/" class="btn btn-neutral float-right" title="Writing WebAssembly code in Haskell">Next <span class="icon icon-circle-arrow-right"></span></a>
+      
+      
+        <a href="../building/" class="btn btn-neutral" title="Building guide"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+	  
+        </div>
+      </div>
+
+    </section>
+    
+  </div>
+
+  <div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+          <a href="https://github.com/tweag/asterius" class="fa fa-github" style="float: left; color: #fcfcfc"> GitHub</a>
+      
+      
+        <span><a href="../building/" style="color: #fcfcfc;">&laquo; Previous</a></span>
+      
+      
+        <span style="margin-left: 15px"><a href="../wasm-in-hs/" style="color: #fcfcfc">Next &raquo;</a></span>
+      
+    </span>
+</div>
+    <script src="../js/theme.js"></script>
+
+</body>
+</html>
