@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedLists #-}
@@ -72,42 +73,45 @@ combineChunks =
 parseFFIChunks :: Parser [Chunk Int]
 parseFFIChunks = combineChunks <$> parseChunks (parseChunk (parseField decimal))
 
-marshalToFFIValueType :: GHC.LHsType GHC.GhcPs -> Maybe FFIValueType
+marshalToFFIValueType ::
+     (GHC.HasOccName (GHC.IdP p)) => GHC.LHsType p -> Maybe FFIValueType
 marshalToFFIValueType (GHC.unLoc -> GHC.HsParTy _ t) = marshalToFFIValueType t
 marshalToFFIValueType (GHC.unLoc -> t) =
   case t of
-    GHC.HsAppTy _ (GHC.unLoc -> (GHC.HsTyVar _ _ (GHC.rdrNameOcc . GHC.unLoc -> c))) _
+    GHC.HsAppTy _ (GHC.unLoc -> (GHC.HsTyVar _ _ (GHC.occName . GHC.unLoc -> c))) _
       | c `elem`
           map
-            GHC.nameOccName
+            GHC.occName
             [GHC.ptrTyConName, GHC.funPtrTyConName, GHC.stablePtrTyConName] ->
         pure
           FFI_VAL {ffiWasmValueType = I64, ffiJSValueType = I32, signed = False}
-    GHC.HsTyVar _ _ (GHC.rdrNameOcc . GHC.unLoc -> tv)
-      | tv == GHC.nameOccName GHC.charTyConName ->
+    GHC.HsTyVar _ _ (GHC.occName . GHC.unLoc -> tv)
+      | tv == GHC.occName GHC.charTyConName ->
         pure
           FFI_VAL {ffiWasmValueType = I64, ffiJSValueType = I32, signed = False}
-      | tv == GHC.nameOccName GHC.intTyConName ->
+      | tv == GHC.occName GHC.intTyConName ->
         pure
           FFI_VAL {ffiWasmValueType = I64, ffiJSValueType = I32, signed = True}
-      | tv == GHC.nameOccName GHC.wordTyConName ->
+      | tv == GHC.occName GHC.wordTyConName ->
         pure
           FFI_VAL {ffiWasmValueType = I64, ffiJSValueType = I32, signed = False}
-      | tv == GHC.nameOccName GHC.floatTyConName ->
+      | tv == GHC.occName GHC.floatTyConName ->
         pure
           FFI_VAL {ffiWasmValueType = F32, ffiJSValueType = F32, signed = True}
-      | tv == GHC.nameOccName GHC.doubleTyConName ->
+      | tv == GHC.occName GHC.doubleTyConName ->
         pure
           FFI_VAL {ffiWasmValueType = F64, ffiJSValueType = F64, signed = True}
       | GHC.occNameString tv == "JSRef" -> pure FFI_JSREF
     _ -> empty
 
-marshalToFFIResultType :: GHC.LHsType GHC.GhcPs -> Maybe (Maybe FFIValueType)
+marshalToFFIResultType ::
+     (GHC.HasOccName (GHC.IdP p)) => GHC.LHsType p -> Maybe (Maybe FFIValueType)
 marshalToFFIResultType (GHC.unLoc -> GHC.HsParTy _ t) = marshalToFFIResultType t
 marshalToFFIResultType (GHC.unLoc -> GHC.HsTupleTy _ _ []) = pure Nothing
 marshalToFFIResultType t = Just <$> marshalToFFIValueType t
 
-marshalToFFIFunctionType :: GHC.LHsType GHC.GhcPs -> Maybe FFIFunctionType
+marshalToFFIFunctionType ::
+     (GHC.HasOccName (GHC.IdP p)) => GHC.LHsType p -> Maybe FFIFunctionType
 marshalToFFIFunctionType (GHC.unLoc -> GHC.HsParTy _ t) =
   marshalToFFIFunctionType t
 marshalToFFIFunctionType (GHC.unLoc -> ty) =
@@ -116,8 +120,8 @@ marshalToFFIFunctionType (GHC.unLoc -> ty) =
       vt <- marshalToFFIValueType t
       ft <- marshalToFFIFunctionType ts
       pure ft {ffiParamTypes = vt : ffiParamTypes ft}
-    GHC.HsAppTy _ (GHC.unLoc -> (GHC.HsTyVar _ _ (GHC.rdrNameOcc . GHC.unLoc -> io))) t
-      | io == GHC.nameOccName GHC.ioTyConName -> do
+    GHC.HsAppTy _ (GHC.unLoc -> (GHC.HsTyVar _ _ (GHC.occName . GHC.unLoc -> io))) t
+      | io == GHC.occName GHC.ioTyConName -> do
         r <- marshalToFFIResultType t
         pure $ FFIFunctionType {ffiParamTypes = [], ffiResultType = r}
     _ -> do
@@ -260,7 +264,7 @@ addFFIProcessor c = do
                           parsed_mod
                           mempty
                             {ffiImportDecls = HM.insert mod_sym mempty mempty}
-                      ffi_mod = generateFFIWrapperModule ffi_state
+                      ffi_mod = generateFFIImportWrapperModule ffi_state
                    in (HM.insert mod_sym ffi_mod ffi_mods, patched_mod)
               patchParsed c mod_summary patched_mod
         , patchTypechecked =
@@ -347,8 +351,8 @@ generateFFIWrapperFunction mod_sym k FFIImportDecl {..} =
     import_func_type = recoverWasmImportFunctionType ffiFunctionType
     wrapper_func_type = recoverWasmWrapperFunctionType ffiFunctionType
 
-generateFFIWrapperModule :: FFIMarshalState -> AsteriusModule
-generateFFIWrapperModule mod_ffi_state@FFIMarshalState {..} =
+generateFFIImportWrapperModule :: FFIMarshalState -> AsteriusModule
+generateFFIImportWrapperModule mod_ffi_state@FFIMarshalState {..} =
   mempty
     { functionMap =
         HM.fromList
